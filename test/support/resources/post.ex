@@ -264,6 +264,8 @@ defmodule AshGraphql.Test.Post do
 
       destroy :delete_post_with_invalid_arguments_names, :destroy_with_invalid_arguments_names
 
+      action(:publish_many_posts, :publish_many_posts)
+
       # this is a mutation just for testing
       action(:random_post, :random)
     end
@@ -351,6 +353,27 @@ defmodule AshGraphql.Test.Post do
         __MODULE__
         |> Ash.Query.limit(1)
         |> Ash.read_one()
+      end)
+    end
+
+    action :publish_many_posts do
+      transaction?(true)
+
+      argument(:post_ids, {:array, :uuid}, allow_nil?: false)
+
+      run(fn input, _ ->
+        post_ids = input.arguments.post_ids
+        posts = AshGraphql.Test.Post |> Ash.Query.filter(id in ^post_ids) |> Ash.read!()
+
+        Enum.map(posts, fn post ->
+          case Ash.Changeset.for_update(post, :update, %{published: true}) |> Ash.update!() do
+            {:ok, post} ->
+              post
+
+            {:error, error} ->
+              error
+          end
+        end)
       end)
     end
 
